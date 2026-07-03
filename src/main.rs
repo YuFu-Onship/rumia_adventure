@@ -89,10 +89,30 @@ impl Bullet {
                 self.x += 600.0 * dt * angle.cos();
                 self.y += 600.0 * dt * angle.sin();
             }
-            BulletType::RumiaTracking {
-                target_id,
-                turn_speed,
-            } => {}
+            BulletType::RumiaTracking { angle } => {
+                self.history.push_front(self.pos);
+                if self.history.len() >= self.max_trail_length {
+                    self.history.pop_back();
+                }
+                self.timer += dt;
+                if self.timer <= 0.1 {
+                    self.pos += 600.0 * angle.cos() * dt * vec2(1.0, 0.0)
+                        + 600.0 * angle.sin() * dt * vec2(0.0, 1.0);
+                } else {
+                    for enemy in enemy_pool.enemies.iter() {
+                        let (ex, ey) = enemy.position();
+                        let dx = ex - self.pos.x;
+                        let dy = ey - self.pos.y;
+
+                        let distance = (dx * dx + dy * dy).sqrt();
+                        let nx = dx / distance;
+                        let ny = dy / distance;
+
+                        self.v += vec2(dx, dy);
+                        self.pos += self.v * dt;
+                    }
+                }
+            }
             BulletType::EnemyStraight { speed, angle } => {
                 self.x += *speed * dt * angle.cos();
                 self.y += *speed * dt * angle.sin();
