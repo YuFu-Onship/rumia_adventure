@@ -57,13 +57,13 @@ impl Rumia {
                 .collect(),
             weapons: vec![
                 Weapon::new(WeaponType::Straight, 0.1),
-                Weapon::new(WeaponType::Tracking, 0.2),
+                Weapon::new(WeaponType::Tracking, 0.05),
             ],
             weapon_idx: 0,
 
             animation_timer: 0.0,
             animation_speed: 0.1,
-            animation_idx: 0,
+            animation_idx: 1,
             animation_frame: "mid_1".to_string(),
             state: "mid".to_string(),
         }
@@ -71,12 +71,6 @@ impl Rumia {
 
     // 更新
     pub fn update(&mut self, dt: f32) {
-        // if is_key_down(KeyCode::Space) {
-        //     self.a = -5.0;
-        // } else {
-        //     self.a = 5.0;
-        // }
-
         let mut vx = 0.0;
         let mut vy = 0.0;
         self.state = "mid".to_string();
@@ -103,22 +97,20 @@ impl Rumia {
             vy *= 0.3;
         }
 
+        if is_key_pressed(KeyCode::Key1) {
+            self.weapon_idx = 0
+        }
+        if is_key_pressed(KeyCode::Key2) {
+            self.weapon_idx = 1
+        }
+
         self.x += vx * self.speed * dt;
         self.y += vy * self.speed * dt;
 
         if self.y <= 6.0 || self.y >= 174.0 {
             self.v = -self.v * 0.6;
             self.a = -self.a * 0.6;
-            // self.a = -self.a * 0.6;
-            // self.a = 0.0;
-            // if self.v.abs() < 0.7 {
-            //     self.v = self.v.signum() * 0.7;
-            // }
         }
-
-        // self.v += self.a;
-        // self.y += self.v * dt;
-        // self.v = self.v.clamp(-self.speed, self.speed);
 
         if self.state == "mid" {
             self.animation_timer += dt;
@@ -229,30 +221,6 @@ impl Rumia {
         }
     }
     pub fn init_sprite_rect() -> HashMap<String, Rect> {
-        // let mut sprite_rect = HashMap::new();
-        // let directions = [
-        //     ("N", 0.0),
-        //     ("S", 10.0),
-        //     ("SE", 20.0),
-        //     ("SW", 30.0),
-        //     ("NE", 40.0),
-        //     ("NW", 50.0),
-        //     ("E", 60.0),
-        //     ("W", 70.0),
-        // ];
-        // for (name, x_pos) in directions {
-        //     sprite_rect.insert(
-        //         name.to_string(),
-        //         Rect {
-        //             x: x_pos,
-        //             y: 0.0,
-        //             w: 10.0,
-        //             h: 10.0,
-        //         },
-        //     );
-        // }
-        // sprite_rect
-
         let mut sprite_rect = HashMap::new();
         let directions = [
             ("mid_1", 0.0, 0.0, 16.0, 16.0),

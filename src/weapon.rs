@@ -36,31 +36,37 @@ impl Weapon {
         let mut bullets = Vec::new();
         match self.weapon_type {
             WeaponType::Straight => {
-                bullets.push(Bullet {
-                    x,
-                    y,
-                    radius: 5.0,
-                    damage: 1.0,
-                    is_me: true,
-                    is_actve: true,
-                    bullet_type: BulletType::RumiaStraight {
-                        angle: rand::gen_range(-0.05, 0.05),
-                    },
-                    history: VecDeque::new(),
-                    max_trail_length: 8,
-                });
+                let arc: f32 = 0.0;
+                for i in 0..2 {
+                    bullets.push(Bullet {
+                        pos: vec2(x, y - 5.0 + 10.0 * (i) as f32),
+                        v: vec2(arc.cos(), arc.sin()) * 600.0,
+                        a: vec2(0.0, 0.0),
+                        radius: 5.0,
+                        damage: 1.0,
+                        is_me: true,
+                        is_actve: true,
+                        timer: 0.0,
+                        bullet_type: BulletType::RumiaStraight { angle: arc },
+                        history: VecDeque::new(),
+                        max_trail_length: 8,
+                    });
+                }
             }
             WeaponType::Tracking => {
+                let arc: f32 = rand::gen_range(-0.5, 0.5);
                 bullets.push(Bullet {
-                    x,
-                    y,
+                    pos: vec2(x, y),
+                    v: vec2(arc.cos(), arc.sin()) * 600.0,
+                    a: vec2(0.0, 0.0),
                     radius: 5.0,
                     damage: 1.0,
                     is_me: true,
                     is_actve: true,
-                    bullet_type: BulletType::RumiaStraight { angle: 0.0 },
+                    timer: 0.0,
+                    bullet_type: BulletType::RumiaTracking { angle: arc },
                     history: VecDeque::new(),
-                    max_trail_length: 8,
+                    max_trail_length: 12,
                 });
             }
         }

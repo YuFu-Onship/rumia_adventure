@@ -1,10 +1,12 @@
 use core::{f32, panic};
-use macroquad::prelude::*;
+use macroquad::{prelude::*, telemetry::drawcalls};
 use std::{
     collections::{HashMap, VecDeque},
+    default,
     env::{self},
     path::PathBuf,
     sync::OnceLock,
+    vec,
 };
 
 mod enemy;
@@ -17,7 +19,7 @@ use particle::{CircleParticle, ParticleParams, ParticleSystem};
 use rumia::Rumia;
 use weapon::{Weapon, WeaponType};
 
-use crate::enemy::Punching;
+use crate::enemy::{FairyAction, OrdinaryFairy, Punching};
 
 // pico8颜色 ---------------------------------
 static PICO_COLOR: OnceLock<HashMap<&'static str, Color>> = OnceLock::new();
@@ -54,82 +56,67 @@ fn init_pico_palette() -> HashMap<&'static str, Color> {
 #[derive(Debug, Clone, Copy)]
 pub enum BulletType {
     RumiaStraight { angle: f32 },
-    RumiaTracking { target_id: u32, turn_speed: f32 },
+    RumiaTracking { angle: f32 },
     EnemyStraight { speed: f32, angle: f32 },
 }
 pub struct Bullet {
-    pub x: f32,
-    pub y: f32,
+    pub pos: Vec2,
+    pub v: Vec2,
+    pub a: Vec2,
+
     pub radius: f32,
     pub damage: f32,
     pub is_me: bool,
     pub bullet_type: BulletType,
     pub is_actve: bool,
+    timer: f32,
+
     pub history: VecDeque<Vec2>,
     pub max_trail_length: usize,
 }
 
 impl Bullet {
-    fn update(&mut self, dt: f32) {
+    fn update(&mut self, dt: f32, enemy_pool: &EnemyPool) {
         match &mut self.bullet_type {
             BulletType::RumiaStraight { angle } => {
-                self.history.push_front(vec2(self.x, self.y));
+                self.history.push_front(self.pos);
                 if self.history.len() >= self.max_trail_length {
                     self.history.pop_back();
                 }
-                // for point in self.history.iter_mut() {
-                // if i < 2 {
-                //     let offset = rand::gen_range(-1.0, 1.0);
-                //     let arc = rand::gen_range(0.0, std::f32::consts::PI);
-                // point.x += offset * arc.cos();
-                // point.y += offset * arc.sin();
-                // }
-                // point.x -= point.x * 0.5 * dt;
-                // }
-                self.x += 600.0 * dt * angle.cos();
-                self.y += 600.0 * dt * angle.sin();
+                self.pos += self.v * dt;
             }
             BulletType::RumiaTracking { angle } => {
                 self.history.push_front(self.pos);
                 if self.history.len() >= self.max_trail_length {
                     self.history.pop_back();
                 }
-                self.timer += dt;
-                if self.timer <= 0.1 {
-                    self.pos += 600.0 * angle.cos() * dt * vec2(1.0, 0.0)
-                        + 600.0 * angle.sin() * dt * vec2(0.0, 1.0);
-                } else {
-                    for enemy in enemy_pool.enemies.iter() {
-                        let (ex, ey) = enemy.position();
-                        let dx = ex - self.pos.x;
-                        let dy = ey - self.pos.y;
 
-                        let distance = (dx * dx + dy * dy).sqrt();
+                let mut shortest_distance = 0.0;
+                let mut target_v = vec2(0.0, 0.0);
+                for enemy in enemy_pool.enemies.iter() {
+                    let (ex, ey) = enemy.position();
+                    let dx = ex - self.pos.x;
+                    let dy = ey - self.pos.y;
+                    let distance = (dx * dx + dy * dy).sqrt();
+
+                    if shortest_distance == 0.0 || distance < shortest_distance {
+                        shortest_distance = distance;
                         let nx = dx / distance;
                         let ny = dy / distance;
-
-                        self.v += vec2(dx, dy);
-                        self.pos += self.v * dt;
+                        target_v = vec2(nx, ny) * 600.0;
                     }
                 }
+                self.v = self.v + (target_v - self.v) * 5.0 * dt;
+                self.pos += self.v * dt;
             }
             BulletType::EnemyStraight { speed, angle } => {
-                self.x += *speed * dt * angle.cos();
-                self.y += *speed * dt * angle.sin();
+                self.pos += self.v * dt;
             }
         }
     }
     fn draw(&self) {
         match &self.bullet_type {
             BulletType::RumiaStraight { .. } => {
-                // for (i, point) in self.history.iter().enumerate() {
-                //     draw_circle(
-                //         point.x,
-                //         point.y,
-                //         self.radius * (1.0 - (i as f32 + 1.0) / self.max_trail_length as f32) + 3.0,
-                //         get_color("black"),
-                //     );
-                // }
                 for (i, point) in self.history.iter().enumerate() {
                     draw_circle(
                         point.x,
@@ -139,7 +126,16 @@ impl Bullet {
                     );
                 }
             }
-            BulletType::RumiaTracking { .. } => {}
+            BulletType::RumiaTracking { .. } => {
+                for (i, point) in self.history.iter().enumerate() {
+                    draw_circle(
+                        point.x,
+                        point.y,
+                        self.radius * (1.0 - (i as f32 + 1.0) / self.max_trail_length as f32),
+                        get_color("red"),
+                    );
+                }
+            }
             BulletType::EnemyStraight { .. } => {}
         }
     }
@@ -222,6 +218,13 @@ async fn main() {
     // 创建敌人池
     let mut enemy_pool: EnemyPool = EnemyPool::new();
     enemy_pool.spawn(Punching::new(200.0, 90.0));
+    let mut fairy = OrdinaryFairy::new(260.0, 90.0);
+    fairy.actions = vec![FairyAction::MoveCircle {
+        center: Vec2 { x: 250.0, y: 90.0 },
+        radius: 30.0,
+        speed: 10.0,
+    }];
+    enemy_pool.spawn(fairy);
 
     // 创建粒子池
     let mut particle_pool: ParticleSystem = ParticleSystem::new(500);
@@ -241,19 +244,19 @@ async fn main() {
         enemy_pool.update(dt);
 
         for bullet in bullet_pool.iter_mut() {
-            bullet.update(dt);
+            bullet.update(dt, &enemy_pool);
         }
 
         for enemy in enemy_pool.enemies.iter_mut() {
             for bullet in bullet_pool.iter_mut() {
-                if enemy.check_collision(bullet.x, bullet.y, bullet.radius, bullet.damage) {
+                if enemy.check_collision(bullet.pos.x, bullet.pos.y, bullet.radius, bullet.damage) {
                     bullet.is_actve = false;
 
                     for _ in 0..5 {
                         let arc = rand::gen_range(-f32::consts::PI, f32::consts::PI);
                         let offset = rand::gen_range(0.8, 1.2);
                         particle_pool.emit(ParticleParams {
-                            pos: vec2(bullet.x, bullet.y),
+                            pos: vec2(bullet.pos.x, bullet.pos.y),
                             v: vec2(arc.cos() * 40.0 * offset, arc.sin() * 40.0 * offset),
                             a: vec2(arc.cos() * 4.0 * offset, arc.sin() * 4.0 * offset),
                             radius: 10.0 * offset,
@@ -269,12 +272,7 @@ async fn main() {
 
         // 设置摄像机
         set_camera(&game_camera);
-        clear_background(Color {
-            r: 29.0 / 255.0,
-            g: 43.0 / 255.0,
-            b: 83.0 / 255.0,
-            a: 1.0,
-        });
+        clear_background(get_color("dark_blue"));
 
         rumia.draw();
         enemy_pool.draw();
@@ -283,8 +281,13 @@ async fn main() {
         for bullet in bullet_pool.iter() {
             bullet.draw();
         }
-        bullet_pool
-            .retain(|b| b.x >= -30.0 && b.x <= 400.0 && b.y >= -30.0 && b.y <= 210.0 && b.is_actve);
+        bullet_pool.retain(|b| {
+            b.pos.x >= -30.0
+                && b.pos.x <= 400.0
+                && b.pos.y >= -30.0
+                && b.pos.y <= 210.0
+                && b.is_actve
+        });
         draw_text_ex(
             format!("HP:{}", rumia.hp),
             0.0,
